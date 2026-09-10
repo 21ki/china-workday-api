@@ -1,4 +1,3 @@
-```yaml
 name: Update chinesecalendar
 
 on:
@@ -163,5 +162,3 @@ jobs:
             -m "chore: update chinesecalendar to $VERSION"
 
           git push
-```
-
