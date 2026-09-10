@@ -6,6 +6,7 @@ requires-python = ">=3.13"
 
 dependencies = [
     "chinesecalendar==1.11.0",
+    "tzdata",
 ]
 
 [dependency-groups]
