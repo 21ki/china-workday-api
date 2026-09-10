@@ -1,0 +1,167 @@
+```yaml
+name: Update chinesecalendar
+
+on:
+  # 每天 UTC 02:00 执行
+  # 北京时间 10:00
+  schedule:
+    - cron: "0 2 * * *"
+
+  # 支持 GitHub Actions 页面手动执行
+  workflow_dispatch:
+
+# 允许 GitHub Actions 修改仓库内容
+permissions:
+  contents: write
+
+jobs:
+  update:
+    name: Check chinesecalendar update
+    runs-on: ubuntu-latest
+
+    steps:
+      # ------------------------------------------------------------
+      # 1. Checkout
+      # ------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # ------------------------------------------------------------
+      # 2. 安装 uv
+      # ------------------------------------------------------------
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9
+
+      # ------------------------------------------------------------
+      # 3. 获取 PyPI 最新版本
+      # ------------------------------------------------------------
+      - name: Get latest chinesecalendar version
+        id: latest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(
+            curl -fsSL \
+              https://pypi.org/pypi/chinesecalendar/json |
+              jq -r '.info.version'
+          )"
+
+          if [[ -z "$VERSION" || "$VERSION" == "null" ]]; then
+            echo "Failed to get chinesecalendar version"
+            exit 1
+          fi
+
+          echo "Latest chinesecalendar version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------
+      # 4. 检查当前版本
+      # ------------------------------------------------------------
+      - name: Check current version
+        id: current
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CURRENT="$(
+            sed -nE \
+              's/^[[:space:]]*"chinesecalendar==([^"]+)".*/\1/p' \
+              pyproject.toml |
+              head -n1
+          )
+
+          if [[ -z "$CURRENT" ]]; then
+            echo "Cannot find chinesecalendar version in pyproject.toml"
+            exit 1
+          fi
+
+          echo "Current version: $CURRENT"
+          echo "Latest version:  ${{ steps.latest.outputs.version }}"
+
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------
+      # 5. 更新 pyproject.toml
+      # ------------------------------------------------------------
+      - name: Update pyproject.toml
+        env:
+          VERSION: ${{ steps.latest.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sed -i -E \
+            "s/chinesecalendar==[0-9]+\.[0-9]+\.[0-9]+/chinesecalendar==$VERSION/g" \
+            pyproject.toml
+
+          echo "Updated pyproject.toml:"
+          grep -n "chinesecalendar" pyproject.toml
+
+      # ------------------------------------------------------------
+      # 6. 更新锁定文件
+      #
+      # pywrangler 当前部署使用 pylock.toml，
+      # 因此这里同时重新生成 pylock.toml。
+      # ------------------------------------------------------------
+      - name: Update pylock.toml
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          uv export \
+            --format pylock.toml \
+            --all-groups \
+            --all-extras \
+            --no-emit-project \
+            -o pylock.toml
+
+      # ------------------------------------------------------------
+      # 7. 显示变更
+      # ------------------------------------------------------------
+      - name: Show changes
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "Git diff"
+          echo "========================================"
+
+          git diff -- pyproject.toml pylock.toml
+
+      # ------------------------------------------------------------
+      # 8. 判断是否真的有变化
+      # ------------------------------------------------------------
+      - name: Check for changes
+        id: changes
+        shell: bash
+        run: |
+          if git diff --quiet -- pyproject.toml pylock.toml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "chinesecalendar is already up to date."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Dependency update detected."
+          fi
+
+      # ------------------------------------------------------------
+      # 9. Commit + Push
+      # ------------------------------------------------------------
+      - name: Commit and push changes
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.latest.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add pyproject.toml pylock.toml
+
+          git commit \
+            -m "chore: update chinesecalendar to $VERSION"
+
+          git push
+```
+
