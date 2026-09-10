@@ -1,6 +1,7 @@
 [project]
 name = "china-workday-api"
 version = "1.0.0"
+description = "China workday API based on chinesecalendar"
 requires-python = ">=3.13"
 
 dependencies = [
