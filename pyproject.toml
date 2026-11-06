@@ -5,7 +5,7 @@ description = "China workday API based on chinesecalendar"
 requires-python = ">=3.13"
 
 dependencies = [
-    "chinesecalendar==1.11.0",
+    "chinesecalendar==1.12.1",
     "tzdata",
 ]
 
